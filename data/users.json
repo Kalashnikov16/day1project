@@ -1,9 +1,10 @@
 [
   {
     "id": 2,
-    "name": "Kalash",
-    "role": "Developer",
-    "createdAt": "2026-08-27T06:45:47.647Z"
+    "name": "Kalash Kurpad",
+    "role": "Senior Engineer",
+    "createdAt": "2026-08-27T06:45:47.647Z",
+    "updatedAt": "2026-08-30T12:25:03.365Z"
   },
   {
     "id": 3,
@@ -11,11 +12,5 @@
     "role": "Lead Developer",
     "createdAt": "2026-08-27T13:32:02.837Z",
     "updatedAt": "2026-08-29T11:18:48.970Z"
-  },
-  {
-    "id": 4,
-    "name": "Mahesh",
-    "role": "Developer",
-    "createdAt": "2026-08-29T13:25:23.460Z"
   }
 ]

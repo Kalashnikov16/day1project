@@ -1,107 +1,84 @@
-const fs = require("fs/promises");
+require("dotenv").config();
+const { PrismaClient } = require("@prisma/client");
+const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3");
+const Database = require("better-sqlite3");
 const path = require("path");
 
-const filePath = path.join(__dirname, "../../data/users.json");
-
-// Helper function to read the JSON file
-async function readData() {
-  try {
-    const data = await fs.readFile(filePath, "utf-8");
-    return JSON.parse(data || "[]");
-  } catch (err) {
-    if (err.code === "ENOENT") return []; // If file doesn't exist yet
-    throw err;
-  }
-}
-
-// Helper function to write to the JSON file
-async function writeData(data) {
-  await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf-8");
-}
+const dbPath = path.join(__dirname, "../../prisma/dev.db");
+const db = new Database(dbPath);
+const adapter = new PrismaBetterSqlite3({
+  url: process.env.DATABASE_URL,
+});
+const prisma = new PrismaClient({ adapter });
 
 // GET all users
 exports.getAllUsers = async (req, res) => {
   try {
-    const users = await readData();
+    const users = await prisma.user.findMany();
     res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ error: "Failed to read data" });
+    res.status(500).json({ error: "Failed to fetch users from database" });
   }
 };
 
-// POST create and store a new user in the file
+// POST a new user
 exports.createUser = async (req, res) => {
   try {
     const { name, role } = req.body;
-    if (!name) {
-      return res.status(400).json({ error: "Name is required" });
-    }
+    if (!name) return res.status(400).json({ error: "Name is required" });
 
-    const users = await readData();
-    const newUser = {
-      id: users.length ? users[users.length - 1].id + 1 : 1,
-      name,
-      role: role || "User",
-      createdAt: new Date().toISOString(),
-    };
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        role: role || "User",
+      },
+    });
 
-    users.push(newUser);
-    await writeData(users);
-
-    res.status(201).json({ message: "Saved successfully", user: newUser });
+    res
+      .status(201)
+      .json({ message: "User created successfully", user: newUser });
   } catch (error) {
-    res.status(500).json({ error: "Failed to save data" });
+    res.status(500).json({ error: "Failed to create user" });
   }
 };
 
-// UPDATE an existing user (PUT)
+// PUT update a user
 exports.updateUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
     const { name, role } = req.body;
 
-    const users = await readData();
-    const userIndex = users.findIndex((u) => u.id === userId);
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { name, role },
+    });
 
-    if (userIndex === -1) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    // Update the user's data, keeping existing values if new ones aren't provided
-    users[userIndex] = {
-      ...users[userIndex],
-      name: name || users[userIndex].name,
-      role: role || users[userIndex].role,
-      updatedAt: new Date().toISOString(),
-    };
-
-    await writeData(users);
     res
       .status(200)
-      .json({ message: "User updated successfully", user: users[userIndex] });
+      .json({ message: "User updated successfully", user: updatedUser });
   } catch (error) {
+    // Prisma throws an error if the record to update doesn't exist
+    if (error.code === "P2025") {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.status(500).json({ error: "Failed to update user" });
   }
 };
 
-// DELETE a user (DELETE)
+// DELETE a user
 exports.deleteUser = async (req, res) => {
   try {
     const userId = parseInt(req.params.id);
 
-    const users = await readData();
-    const userIndex = users.findIndex((u) => u.id === userId);
+    await prisma.user.delete({
+      where: { id: userId },
+    });
 
-    if (userIndex === -1) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    // Remove the user from the array
-    users.splice(userIndex, 1);
-
-    await writeData(users);
     res.status(200).json({ message: "User deleted successfully" });
   } catch (error) {
+    if (error.code === "P2025") {
+      return res.status(404).json({ error: "User not found" });
+    }
     res.status(500).json({ error: "Failed to delete user" });
   }
 };

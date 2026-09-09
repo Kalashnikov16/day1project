@@ -1,9 +1,11 @@
 const express = require("express");
 const cors = require("cors");
 const userRoutes = require("./routes/userRoutes");
+const morgan = require("morgan");
 
 const app = express();
 
+app.use(morgan("dev"));
 app.use(cors());
 app.use(express.json()); // Parses incoming JSON payloads
 app.use("/api/users", userRoutes);
