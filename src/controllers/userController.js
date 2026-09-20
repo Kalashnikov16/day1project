@@ -2,6 +2,8 @@ require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 const mariadb = require("mariadb");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 // 1. Create a connection pool using environment variables
 const pool = mariadb.createPool({
@@ -85,5 +87,32 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
     res.status(500).json({ error: "Failed to delete user" });
+  }
+};
+
+// LOGIN endpoint
+exports.login = async (req, res) => {
+  const { email, password } = req.body;
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
+
+  const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+    expiresIn: "24h",
+  });
+  res.json({ token, user: { id: user.id, name: user.name } });
+};
+
+// GET my details
+exports.getMe = async (req, res) => {
+  try {
+    const myDetails = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+    });
+    res.json(myDetails);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch user details" });
   }
 };
