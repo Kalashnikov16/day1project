@@ -6,3 +6,5 @@ Questions
 4) why does the front end call get endpoint twice while reloading 
 5) mysqlite database connected, try to implement mysql database by updating prisma schema source, new adapter driver package,
    connection string url, etc.
+6) Instead of sending separate user object we can include it in the token itself and get the desired response, learn more about bcrypt, create a sign up 
+   or register account api, learn the token lifecyle flow and headers 

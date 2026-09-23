@@ -94,7 +94,7 @@ exports.deleteUser = async (req, res) => {
 exports.login = async (req, res) => {
   const { email, password } = req.body;
   const user = await prisma.user.findUnique({ where: { email } });
-
+  console.log(password);
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return res.status(401).json({ error: "Invalid credentials" });
   }
@@ -114,5 +114,43 @@ exports.getMe = async (req, res) => {
     res.json(myDetails);
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch user details" });
+  }
+};
+
+// Register New User
+exports.register = async (req, res) => {
+  const { name, email, password } = req.body;
+
+  try {
+    // 1. Check if the email already exists to prevent database constraint crashes
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: "Email already in use" });
+    }
+
+    // 2. Hash the password with a cost factor of 10
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 3. Save the new user to MySQL
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        // role defaults to "User" based on your Prisma schema
+      },
+    });
+
+    // 4. Generate a token to auto-login the new user immediately
+    const token = jwt.sign({ userId: newUser.id }, process.env.JWT_SECRET, {
+      expiresIn: "24h",
+    });
+
+    res
+      .status(201)
+      .json({ token, user: { id: newUser.id, name: newUser.name } });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to register user" });
   }
 };

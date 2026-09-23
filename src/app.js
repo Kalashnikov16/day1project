@@ -13,7 +13,7 @@ app.use(express.json()); // Parses incoming JSON payloads
 app.use("/api/users", userRoutes);
 // Open route: Anyone can try to log in
 app.post("/api/login", userController.login);
-
+app.post("/api/register", userController.register);
 // Protected route: Requires valid token to view all users
 app.get("/api/users", authMiddleware, userController.getAllUsers);
 
