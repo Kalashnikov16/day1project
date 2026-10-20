@@ -3,7 +3,7 @@ import "./App.css";
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [isRegistering, setIsRegistering] = useState(false); // Toggles between Login and Register views
+  const [role, setRole] = useState(localStorage.getItem("role") || "");
 
   // Form State
   const [name, setName] = useState("");
@@ -15,6 +15,82 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [viewTitle, setViewTitle] = useState("");
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  const handleLogout = async () => {
+    const currentToken = localStorage.getItem("token");
+    if (currentToken) {
+      try {
+        await fetch("http://localhost:8000/api/logout", {
+          method: "POST",
+          credentials: "include",
+        });
+      } catch (err) {
+        console.error("Logout request failed", err);
+      }
+    }
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    setToken("");
+    setRole("");
+    setUsers([]);
+    setViewTitle("");
+    setEmail("");
+    setPassword("");
+    setName("");
+    setError(null);
+  };
+
+  // Interceptor Function: Catches 401s, asks backend to verify DB refresh token, and retries request
+  const fetchWithAuth = async (url, options = {}) => {
+    let currentToken = localStorage.getItem("token");
+
+    const headers = {
+      "Content-Type": "application/json",
+      ...options.headers,
+      Authorization: `Bearer ${currentToken}`,
+    };
+
+    // 1. Execute initial API call (include credentials for cookies)
+    let response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+
+    // 2. Catch 401 Unauthorized (Access Token expired)
+    if (response.status === 401) {
+      const refreshRes = await fetch("http://localhost:8000/api/refresh", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+      });
+
+      if (!refreshRes.ok) {
+        handleLogout();
+        throw new Error("Session expired. Please log in again.");
+      }
+
+      const data = await refreshRes.json();
+
+      // Store ONLY the new Access Token in localStorage and state
+      localStorage.setItem("token", data.token);
+      setToken(data.token);
+
+      // Replay original request with the new Access Token
+      headers.Authorization = `Bearer ${data.token}`;
+      response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: "include",
+      });
+    }
+
+    return response;
+  };
 
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -33,20 +109,31 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        credentials: "include", // 🟢 Crucial to receive the HttpOnly Cookie on login
       });
       const data = await response.json();
 
       if (!response.ok) throw new Error(data.error || "Authentication failed");
 
-      localStorage.setItem("token", data.token);
-      setToken(data.token);
-      setUsers([]);
-      setViewTitle("");
+      if (isRegistering) {
+        alert("Account created successfully! Please log in.");
+        setIsRegistering(false);
+        setPassword("");
+        setEmail("");
+      } else {
+        // 🟢 Store token and role upon successful login
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("role", data.user.role);
+        setToken(data.token);
+        setRole(data.user.role);
 
-      // Reset form fields
-      setName("");
-      setEmail("");
-      setPassword("");
+        setUsers([]);
+        setViewTitle("");
+
+        setName("");
+        setEmail("");
+        setPassword("");
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -54,25 +141,18 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    setToken("");
-    setUsers([]);
-    setEmail("");
-    setPassword("");
-  };
-
   const fetchMyDetails = async () => {
     setError(null);
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/users/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetchWithAuth(
+        "http://localhost:8000/api/users/me",
+      );
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || "Failed to fetch details");
-      setUsers([data]);
+
+      setUsers([data]); // Wraps single user object in an array cleanly
       setViewTitle("My Details");
     } catch (err) {
       setError(err.message);
@@ -85,14 +165,33 @@ function App() {
     setError(null);
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/users", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await fetchWithAuth("http://localhost:8000/api/users");
       const data = await response.json();
       if (!response.ok)
         throw new Error(data.error || "Failed to fetch details");
-      setUsers(data);
+
+      setUsers(data); // data is already an array of users
       setViewTitle("User Directory");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchSingleUserDetails = async (userId) => {
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetchWithAuth(
+        `http://localhost:8000/api/users/${userId}`,
+      );
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error || "Failed to fetch profile");
+
+      setUsers([data]); // Wraps single inspected profile in an array
+      setViewTitle(`Profile Details for User ID: ${userId}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -154,7 +253,7 @@ function App() {
         <button
           onClick={() => {
             setIsRegistering(!isRegistering);
-            setError(null); // Clear errors when switching modes
+            setError(null);
           }}
           style={{
             background: "none",
@@ -183,7 +282,10 @@ function App() {
           padding: "1rem 2rem",
         }}
       >
-        <h2>Dashboard</h2>
+        <h2>
+          Dashboard{" "}
+          <small style={{ fontSize: "0.8rem", color: "gray" }}>({role})</small>
+        </h2>
         <button
           onClick={handleLogout}
           style={{
@@ -247,18 +349,41 @@ function App() {
                   textAlign: "left",
                 }}
               >
+                {/* Always show the Name */}
                 <h3 style={{ marginTop: 0 }}>{user.name}</h3>
-                <p>
-                  <strong>Role:</strong> {user.role}
-                </p>
-                {user.email && (
-                  <p>
-                    <strong>Email:</strong> {user.email}
-                  </p>
+
+                {/* CONDITION A: If viewing the User Directory, show ONLY name + Admin view button */}
+                {viewTitle === "User Directory" ? (
+                  <>
+                    {role === "Admin" && (
+                      <button
+                        onClick={() => fetchSingleUserDetails(user.id)}
+                        style={{
+                          marginTop: "0.5rem",
+                          padding: "0.4rem 0.8rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        View Full Details
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  /* CONDITION B: If viewing "My Details" or an inspected profile, show full info once */
+                  <>
+                    <p>
+                      <strong>Role:</strong> {user.role}
+                    </p>
+                    {user.email && (
+                      <p>
+                        <strong>Email:</strong> {user.email}
+                      </p>
+                    )}
+                    <p>
+                      <small>ID: {user.id}</small>
+                    </p>
+                  </>
                 )}
-                <p>
-                  <small>ID: {user.id}</small>
-                </p>
               </div>
             ))}
           </div>
