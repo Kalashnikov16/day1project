@@ -2,6 +2,7 @@ require("dotenv").config();
 const { PrismaClient } = require("@prisma/client");
 const { PrismaMariaDb } = require("@prisma/adapter-mariadb");
 const mariadb = require("mariadb");
+const sseManager = require("../utils/sseManager");
 const {
   validatePermissionDependencies,
   findMatchingPermissionRole,
@@ -214,11 +215,9 @@ exports.reassignAndDeleteRole = async (req, res) => {
     }
 
     if (replacementRoleId === roleId) {
-      return res
-        .status(400)
-        .json({
-          error: "Replacement role must be different from the deleted role.",
-        });
+      return res.status(400).json({
+        error: "Replacement role must be different from the deleted role.",
+      });
     }
 
     await prisma.$transaction(async (tx) => {
@@ -296,6 +295,25 @@ exports.assignRoleToUsers = async (req, res) => {
         });
       }
     });
+
+    try {
+      const roleWithPerms = await prisma.role.findUnique({
+        where: { id: roleId },
+        include: { permissions: { include: { permission: true } } },
+      });
+      const updatedPermissions =
+        roleWithPerms?.permissions.map((rp) => rp.permission.name) || [];
+
+      for (const uid of userIds) {
+        sseManager.notifyUser(Number(uid), {
+          type: "ROLE_CHANGED",
+          role: role.name,
+          permissions: updatedPermissions,
+        });
+      }
+    } catch (sseErr) {
+      console.error("SSE notify failed after role assignment:", sseErr);
+    }
 
     return res.status(200).json({
       message: `Assigned role "${role.name}" to ${userIds.length} user(s).`,
