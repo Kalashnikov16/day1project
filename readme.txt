@@ -19,12 +19,8 @@ Questions
 14) use httponly cookie to store refresh token and get basic user details from access token in local storage 
 15) implement two roles - admin and user and admin can see everyone's details but user can only see his/her details 
 16) forgot password and otp verification after user registration**
-17) create a role and user role table and refresh token table(iat,exp,user.id)**
-18) implement request from admin to upgrade user role using user request status table**
+17) create a role and user role table and refresh token table(iat,exp,user.id)
+18) implement request from admin to upgrade user role using user request status table
 19) sse should handle auto logout when role is updgraded to admin
-
-USER STATUS TABLE 
-
-USERID   REQUESTEDROLE  STATUS
-
-12.                     PENDING 
+20) Read up on normalization and sse flow**
+21) https://mailtrap.io for smtp mail service, https://www.twilio.com/en-us for sms, https://baileys.wiki for whatsapp 

@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const userRoutes = require("./routes/userRoutes");
+const roleRoutes = require("./routes/roleRoutes");
 const morgan = require("morgan");
 const authMiddleware = require("./middleware/auth");
 const userController = require("./controllers/userController");
@@ -19,7 +20,8 @@ app.use(morgan("dev"));
 //app.use(cors());
 app.use(express.json()); // Parses incoming JSON payloads
 app.use(cookieParser());
-app.use("/api/users", userRoutes);
+app.use("/api", userRoutes);
+app.use("/api", roleRoutes);
 // Open route: Anyone can try to log in
 app.post("/api/login", userController.login);
 app.post("/api/register", userController.register);
